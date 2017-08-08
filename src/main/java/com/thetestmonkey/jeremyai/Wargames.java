@@ -9,7 +9,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -23,8 +25,11 @@ public class Wargames {
     private HashMap<Integer, Integer> moves;
     private String result;
     private final MongoWargamesConnector mwc;
-    private int jMove = 1;
     private int turn = 1;
+    private int move = 1;
+    private HashMap<Integer, HashMap<Integer, Integer>> _winResults = new HashMap<>();
+    private HashMap<Integer, HashMap<Integer, Integer>> _loseResults = new HashMap<>();
+    private HashMap<Integer, HashMap<Integer, Integer>> _drawResults = new HashMap<>();
 
     public Wargames() {
         this.mwc = new MongoWargamesConnector();
@@ -49,6 +54,7 @@ public class Wargames {
     }
 
     public void BeginGame() {
+        LoadPreviousResults();
         System.out.println("You are X. I am O.");
         DrawWargamesBoard();
         DecideWhoseTurn();
@@ -66,10 +72,10 @@ public class Wargames {
     private void DecideWhoseTurn() {
 
         DetermineIfWinner();
-        switch (jMove) {
+        switch (turn) {
             case 1:
                 System.out.println("Please select a number from those available");
-                HumansTurn();
+                OthersTurn();
                 break;
             case 0:
                 JeremysTurn();
@@ -81,31 +87,31 @@ public class Wargames {
 
     }
 
-    private void HumansTurn() {
+    private void OthersTurn() {
 
         try {
             int selectedNumber = Integer.parseInt(br.readLine());
             if (selectedNumber < 1 || selectedNumber > 9) {
                 System.out.println("Please enter a valid number");
                 System.out.println();
-                HumansTurn();
+                OthersTurn();
             }
             if ("X".equalsIgnoreCase(wargamesBoard.get(selectedNumber)) || "O".equalsIgnoreCase(wargamesBoard.get(selectedNumber))) {
                 System.out.println("Please select a number that hasn't already been picked.");
                 System.out.println();
-                HumansTurn();
+                OthersTurn();
             }
             wargamesBoard.put(selectedNumber, "X");
 
-            moves.put(turn, selectedNumber);
-            turn++;
+            moves.put(move, selectedNumber);
+            move++;
             DrawWargamesBoard();
-            jMove = 0;
+            turn = 0;
             DecideWhoseTurn();
         } catch (IOException | NumberFormatException e) {
             System.out.println("Please enter a valid number");
             System.out.println();
-            HumansTurn();
+            OthersTurn();
         }
     }
 
@@ -120,14 +126,14 @@ public class Wargames {
 
             }
         }
-        int selectedNumber = availableNumbers.get(ThreadLocalRandom.current().nextInt(0, availableNumbers.size()));
+        int selectedNumber = DetermineBestNextMove(availableNumbers);
 
         wargamesBoard.put(selectedNumber, "O");
-        moves.put(turn, selectedNumber);
-        turn++;
+        moves.put(move, selectedNumber);
+        move++;
         DrawWargamesBoard();
 
-        jMove = 1;
+        turn = 1;
 
         DecideWhoseTurn();
     }
@@ -145,24 +151,24 @@ public class Wargames {
     private void CheckDiagonalsForWin() {
         if (wargamesBoard.get(1).equals(wargamesBoard.get(5)) && wargamesBoard.get(5).equals(wargamesBoard.get(9))) {
             if ("X".equalsIgnoreCase(wargamesBoard.get(1))) {
-                result = "Human";
+                result = "Other";
 
             } else {
                 result = "Jeremy";
 
             }
-            jMove = 2;
+            turn = 2;
 
         }
         if (wargamesBoard.get(3).equals(wargamesBoard.get(5)) && wargamesBoard.get(5).equals(wargamesBoard.get(7))) {
             if ("X".equalsIgnoreCase(wargamesBoard.get(3))) {
-                result = "Human";
+                result = "Other";
 
             } else {
                 result = "Jeremy";
 
             }
-            jMove = 2;
+            turn = 2;
 
         }
     }
@@ -174,13 +180,13 @@ public class Wargames {
             int thirdSpace = i + 6;
             if (wargamesBoard.get(firstSpace).equals(wargamesBoard.get(secondSpace)) && wargamesBoard.get(secondSpace).equals(wargamesBoard.get(thirdSpace))) {
                 if ("X".equalsIgnoreCase(wargamesBoard.get(firstSpace))) {
-                    result = "Human";
+                    result = "Other";
 
                 } else {
                     result = "Jeremy";
 
                 }
-                jMove = 2;
+                turn = 2;
             }
         }
     }
@@ -193,13 +199,13 @@ public class Wargames {
             int thirdSpace = i + 3;
             if (wargamesBoard.get(firstSpace).equals(wargamesBoard.get(secondSpace)) && wargamesBoard.get(secondSpace).equals(wargamesBoard.get(thirdSpace))) {
                 if ("X".equalsIgnoreCase(wargamesBoard.get(firstSpace))) {
-                    result = "Human";
+                    result = "Other";
 
                 } else {
                     result = "Jeremy";
 
                 }
-                jMove = 2;
+                turn = 2;
             }
         }
     }
@@ -225,7 +231,7 @@ public class Wargames {
                 result = "Draw";
 
                 System.out.println();
-                jMove = 2;
+                turn = 2;
                 return true;
             }
 
@@ -236,7 +242,7 @@ public class Wargames {
     private void EndGame() {
         mwc.GenerateResults(moves, result);
 
-        if ("Human".equalsIgnoreCase(result)) {
+        if ("Other".equalsIgnoreCase(result)) {
             System.out.println("You Win! Congratulations");
         } else if ("Jeremy".equalsIgnoreCase(result)) {
             System.out.println("I Win!");
@@ -247,6 +253,90 @@ public class Wargames {
         }
 
         System.out.println("That Was Fun. Let me commit this to Memory");
+    }
+
+    private void LoadPreviousResults() {
+        mwc.QueryMongoCollection();
+        _winResults = mwc.GetWinResults();
+        _loseResults = mwc.GetLoseResults();
+        _drawResults = mwc.GetDrawResults();
+    }
+
+    private int DetermineBestNextMove(ArrayList<Integer> availableNumbers) {
+
+        //TODO: Count Highest Winning Move for this Move
+        //TODO: Count Highest Losing Move remove from Array
+        //TODO: If Highest Winning move does not exists choose Highest Draw Move
+        HashMap<Integer, Integer> countOfWinningMoves = new HashMap<>();
+        HashMap<Integer, Integer> countOfLosingMoves = new HashMap<>();
+        HashMap<Integer, Integer> countOfDrawingMoves = new HashMap<>();
+
+        int selectedNumber = 0;
+        try {
+            for (int i : availableNumbers) {
+                int winCount = 0;
+                int loseCount = 0;
+                int drawCount = 0;
+
+                for (Map.Entry<Integer, HashMap<Integer, Integer>> moveList : _winResults.entrySet()) {
+                    HashMap<Integer, Integer> moveSet = moveList.getValue();
+                    int nextMove = moveSet.get(move);
+                    if (nextMove == i) {
+                        winCount++;
+                    }
+
+                }
+                countOfWinningMoves.put(i, winCount);
+                for (Map.Entry<Integer, HashMap<Integer, Integer>> moveList : _loseResults.entrySet()) {
+                    HashMap<Integer, Integer> moveSet = moveList.getValue();
+                    int nextMove = moveSet.get(move);
+                    if (nextMove == i) {
+                        loseCount++;
+                    }
+                }
+                countOfLosingMoves.put(i, loseCount);
+                for (Map.Entry<Integer, HashMap<Integer, Integer>> moveList : _drawResults.entrySet()) {
+                    HashMap<Integer, Integer> moveSet = moveList.getValue();
+                    int nextMove = moveSet.get(move);
+                    if (nextMove == i) {
+                        drawCount++;
+                    }
+                }
+
+                countOfDrawingMoves.put(i, drawCount);
+            }
+
+            Map.Entry<Integer, Integer> maxEntry = null;
+
+            if (!countOfWinningMoves.isEmpty()) {
+                for (Map.Entry<Integer, Integer> entry : countOfWinningMoves.entrySet()) {
+                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
+                        maxEntry = entry;
+                    }
+                }
+               return selectedNumber = maxEntry.getKey();
+            }
+            if (!countOfDrawingMoves.isEmpty()) {
+                for (Map.Entry<Integer, Integer> entry : countOfDrawingMoves.entrySet()) {
+                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
+                        maxEntry = entry;
+                    }
+                }
+              return  selectedNumber = maxEntry.getKey();
+            }
+            if (!countOfLosingMoves.isEmpty()) {
+                for (Map.Entry<Integer, Integer> entry : countOfLosingMoves.entrySet()) {
+                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
+                        maxEntry = entry;
+                    }
+                }
+               return selectedNumber = maxEntry.getKey();
+            }
+        } catch (Exception e) {
+            selectedNumber = availableNumbers.get(ThreadLocalRandom.current().nextInt(0, availableNumbers.size()));
+        }
+
+        return selectedNumber;
     }
 
 }
