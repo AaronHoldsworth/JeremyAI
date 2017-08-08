@@ -17,7 +17,7 @@ public class JeremyAIMain {
 
     static BufferedReader br;
     static Wargames wg;
-
+    
     public static void main(String[] args) {
         br = new BufferedReader(new InputStreamReader(System.in));
         System.out.println("Hello, my name is Jeremy.");

@@ -20,10 +20,15 @@ public class Wargames {
 
     HashMap<Integer, String> wargamesBoard;
     BufferedReader br;
-    JeremyAIMain mainClass;
+    private HashMap<Integer, Integer> moves;
+    private String result;
+    private final MongoWargamesConnector mwc;
+    private int jMove = 1;
     private int turn = 1;
 
     public Wargames() {
+        this.mwc = new MongoWargamesConnector();
+        this.moves = new HashMap<>();
         wargamesBoard = new HashMap<Integer, String>() {
             {
                 put(1, "1");
@@ -38,6 +43,7 @@ public class Wargames {
             }
         };
 
+        mwc.ConnectToMongoDatabse();
         br = new BufferedReader(new InputStreamReader(System.in));
         BeginGame();
     }
@@ -60,13 +66,17 @@ public class Wargames {
     private void DecideWhoseTurn() {
 
         DetermineIfWinner();
-        if (turn == 1) {
-            System.out.println("Please select a number from those available");
-            HumansTurn();
-        } else if (turn == 0) {
-            JeremysTurn();
-        } else {
-            EndGame();
+        switch (jMove) {
+            case 1:
+                System.out.println("Please select a number from those available");
+                HumansTurn();
+                break;
+            case 0:
+                JeremysTurn();
+                break;
+            default:
+                EndGame();
+                break;
         }
 
     }
@@ -87,8 +97,10 @@ public class Wargames {
             }
             wargamesBoard.put(selectedNumber, "X");
 
+            moves.put(turn, selectedNumber);
+            turn++;
             DrawWargamesBoard();
-            turn = 0;
+            jMove = 0;
             DecideWhoseTurn();
         } catch (IOException | NumberFormatException e) {
             System.out.println("Please enter a valid number");
@@ -105,14 +117,17 @@ public class Wargames {
             String currentValue = wargamesBoard.get(i);
             if (!"x".equalsIgnoreCase(currentValue) && !"O".equalsIgnoreCase(currentValue)) {
                 availableNumbers.add(i);
+
             }
         }
         int selectedNumber = availableNumbers.get(ThreadLocalRandom.current().nextInt(0, availableNumbers.size()));
 
         wargamesBoard.put(selectedNumber, "O");
+        moves.put(turn, selectedNumber);
+        turn++;
         DrawWargamesBoard();
 
-        turn = 1;
+        jMove = 1;
 
         DecideWhoseTurn();
     }
@@ -123,31 +138,31 @@ public class Wargames {
             CheckRowsForWin();
             CheckColumnsForWin();
             CheckDiagonalsForWin();
-            
+
         }
     }
 
     private void CheckDiagonalsForWin() {
         if (wargamesBoard.get(1).equals(wargamesBoard.get(5)) && wargamesBoard.get(5).equals(wargamesBoard.get(9))) {
             if ("X".equalsIgnoreCase(wargamesBoard.get(1))) {
-                System.out.println("You Win! Congratulations!");
+                result = "Human";
 
             } else {
-                System.out.println("I Win!!");
+                result = "Jeremy";
 
             }
-            turn = 2;
+            jMove = 2;
 
         }
         if (wargamesBoard.get(3).equals(wargamesBoard.get(5)) && wargamesBoard.get(5).equals(wargamesBoard.get(7))) {
             if ("X".equalsIgnoreCase(wargamesBoard.get(3))) {
-                System.out.println("You Win! Congratulations!");
+                result = "Human";
 
             } else {
-                System.out.println("I Win!!");
+                result = "Jeremy";
 
             }
-            turn = 2;
+            jMove = 2;
 
         }
     }
@@ -159,13 +174,13 @@ public class Wargames {
             int thirdSpace = i + 6;
             if (wargamesBoard.get(firstSpace).equals(wargamesBoard.get(secondSpace)) && wargamesBoard.get(secondSpace).equals(wargamesBoard.get(thirdSpace))) {
                 if ("X".equalsIgnoreCase(wargamesBoard.get(firstSpace))) {
-                    System.out.println("You Win! Congratulations!");
+                    result = "Human";
 
                 } else {
-                    System.out.println("I Win!!");
+                    result = "Jeremy";
 
                 }
-                turn = 2;
+                jMove = 2;
             }
         }
     }
@@ -178,37 +193,60 @@ public class Wargames {
             int thirdSpace = i + 3;
             if (wargamesBoard.get(firstSpace).equals(wargamesBoard.get(secondSpace)) && wargamesBoard.get(secondSpace).equals(wargamesBoard.get(thirdSpace))) {
                 if ("X".equalsIgnoreCase(wargamesBoard.get(firstSpace))) {
-                    System.out.println("You Win! Congratulations!");
+                    result = "Human";
 
                 } else {
-                    System.out.println("I Win!!");
+                    result = "Jeremy";
 
                 }
-                turn = 2;
+                jMove = 2;
             }
         }
-    }
-
-    private void EndGame() {
-        System.out.println("That Was Fun. Let me commit this to Memory");
     }
 
     private boolean CheckForDraw() {
 
         ArrayList<Integer> availableNumbers = new ArrayList<>();
-        for (int i = 1; i <= 9; i++) {
-            String currentValue = wargamesBoard.get(i);
-            if (!"x".equalsIgnoreCase(currentValue) && !"O".equalsIgnoreCase(currentValue)) {
-                availableNumbers.add(i);
-            }
-        }
-        if (availableNumbers.size() == 0) {
-            System.out.println("It's a draw!");
-            System.out.println();
-            turn = 2;
+
+        CheckRowsForWin();
+        CheckColumnsForWin();
+        CheckDiagonalsForWin();
+
+        if (!"".equals(result)) {
             return true;
+        } else {
+            for (int i = 1; i <= 9; i++) {
+                String currentValue = wargamesBoard.get(i);
+                if (!"x".equalsIgnoreCase(currentValue) && !"O".equalsIgnoreCase(currentValue)) {
+                    availableNumbers.add(i);
+                }
+            }
+            if (availableNumbers.isEmpty()) {
+                result = "Draw";
+
+                System.out.println();
+                jMove = 2;
+                return true;
+            }
+
+            return false;
         }
-        return false;
+    }
+
+    private void EndGame() {
+        mwc.GenerateResults(moves, result);
+
+        if ("Human".equalsIgnoreCase(result)) {
+            System.out.println("You Win! Congratulations");
+        } else if ("Jeremy".equalsIgnoreCase(result)) {
+            System.out.println("I Win!");
+        } else if ("Draw".equalsIgnoreCase(result)) {
+            System.out.println("It's a Draw!");
+        } else {
+            System.out.println("Something went peculiar");
+        }
+
+        System.out.println("That Was Fun. Let me commit this to Memory");
     }
 
 }
