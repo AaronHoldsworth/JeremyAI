@@ -9,10 +9,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  *
@@ -23,15 +20,14 @@ public class Wargames {
     HashMap<Integer, String> wargamesBoard;
     BufferedReader br;
     private HashMap<Integer, Integer> moves;
-    private String result;
+    private String result = "";
     private final MongoWargamesConnector mwc;
     private int turn = 1;
     private int move = 1;
-    private HashMap<Integer, HashMap<Integer, Integer>> _winResults = new HashMap<>();
-    private HashMap<Integer, HashMap<Integer, Integer>> _loseResults = new HashMap<>();
-    private HashMap<Integer, HashMap<Integer, Integer>> _drawResults = new HashMap<>();
+    JeremyWargamesLogic jwl;
 
     public Wargames() {
+        this.jwl = new JeremyWargamesLogic();
         this.mwc = new MongoWargamesConnector();
         this.moves = new HashMap<>();
         wargamesBoard = new HashMap<Integer, String>() {
@@ -126,7 +122,10 @@ public class Wargames {
 
             }
         }
-        int selectedNumber = DetermineBestNextMove(availableNumbers);
+        jwl.SetAvailableNumbers(availableNumbers);
+        jwl.SetMove(move);
+        jwl.SetWargamesBoard(wargamesBoard);
+        int selectedNumber = jwl.DetermineBestNextMove();
 
         wargamesBoard.put(selectedNumber, "O");
         moves.put(move, selectedNumber);
@@ -144,8 +143,8 @@ public class Wargames {
             CheckRowsForWin();
             CheckColumnsForWin();
             CheckDiagonalsForWin();
-
         }
+        
     }
 
     private void CheckDiagonalsForWin() {
@@ -257,86 +256,9 @@ public class Wargames {
 
     private void LoadPreviousResults() {
         mwc.QueryMongoCollection();
-        _winResults = mwc.GetWinResults();
-        _loseResults = mwc.GetLoseResults();
-        _drawResults = mwc.GetDrawResults();
+        jwl.SetWinResults(mwc.GetWinResults());
+        jwl.SetLoseResults(mwc.GetLoseResults());
+        jwl.SetDrawResults(mwc.GetDrawResults());
+        
     }
-
-    private int DetermineBestNextMove(ArrayList<Integer> availableNumbers) {
-
-        //TODO: Count Highest Winning Move for this Move
-        //TODO: Count Highest Losing Move remove from Array
-        //TODO: If Highest Winning move does not exists choose Highest Draw Move
-        HashMap<Integer, Integer> countOfWinningMoves = new HashMap<>();
-        HashMap<Integer, Integer> countOfLosingMoves = new HashMap<>();
-        HashMap<Integer, Integer> countOfDrawingMoves = new HashMap<>();
-
-        int selectedNumber = 0;
-        try {
-            for (int i : availableNumbers) {
-                int winCount = 0;
-                int loseCount = 0;
-                int drawCount = 0;
-
-                for (Map.Entry<Integer, HashMap<Integer, Integer>> moveList : _winResults.entrySet()) {
-                    HashMap<Integer, Integer> moveSet = moveList.getValue();
-                    int nextMove = moveSet.get(move);
-                    if (nextMove == i) {
-                        winCount++;
-                    }
-
-                }
-                countOfWinningMoves.put(i, winCount);
-                for (Map.Entry<Integer, HashMap<Integer, Integer>> moveList : _loseResults.entrySet()) {
-                    HashMap<Integer, Integer> moveSet = moveList.getValue();
-                    int nextMove = moveSet.get(move);
-                    if (nextMove == i) {
-                        loseCount++;
-                    }
-                }
-                countOfLosingMoves.put(i, loseCount);
-                for (Map.Entry<Integer, HashMap<Integer, Integer>> moveList : _drawResults.entrySet()) {
-                    HashMap<Integer, Integer> moveSet = moveList.getValue();
-                    int nextMove = moveSet.get(move);
-                    if (nextMove == i) {
-                        drawCount++;
-                    }
-                }
-
-                countOfDrawingMoves.put(i, drawCount);
-            }
-
-            Map.Entry<Integer, Integer> maxEntry = null;
-
-            if (!countOfWinningMoves.isEmpty()) {
-                for (Map.Entry<Integer, Integer> entry : countOfWinningMoves.entrySet()) {
-                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
-                        maxEntry = entry;
-                    }
-                }
-               return selectedNumber = maxEntry.getKey();
-            }
-            if (!countOfDrawingMoves.isEmpty()) {
-                for (Map.Entry<Integer, Integer> entry : countOfDrawingMoves.entrySet()) {
-                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
-                        maxEntry = entry;
-                    }
-                }
-              return  selectedNumber = maxEntry.getKey();
-            }
-            if (!countOfLosingMoves.isEmpty()) {
-                for (Map.Entry<Integer, Integer> entry : countOfLosingMoves.entrySet()) {
-                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
-                        maxEntry = entry;
-                    }
-                }
-               return selectedNumber = maxEntry.getKey();
-            }
-        } catch (Exception e) {
-            selectedNumber = availableNumbers.get(ThreadLocalRandom.current().nextInt(0, availableNumbers.size()));
-        }
-
-        return selectedNumber;
-    }
-
 }
